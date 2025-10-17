@@ -1,21 +1,38 @@
+using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 public class PlayerMovement : MonoBehaviour
 {
+    [Header("Movement Settings")]
     public CharacterController controller;
     public float speed = 12f;
-    public float gravity = -9.8f * 2;
-    public float jumpHeight = 3f;
+    public float sprintSpeed = 20f;
+    public float acceleration = 10f;
+    public float deceleration = 10f;
 
+    [Header("Rotation Settings")]
+    public float rotationSpeed = 10f;
+    public float rotationSmoothness = 0.1f;
+
+    [Header("Jump Settings")]
+    public float jumpHeight = 3f;
+    public float gravity = -19.6f;
+
+    [Header("Ground Check Settings")]
     public Transform groundCheck;
     public float groundDistance = 0.4f;
     public LayerMask groundMask;
 
-    Vector3 velocity;
-    bool isGrounded;
+    private Vector3 velocity;
+    private Vector3 currentVelocity;
+    private float currentSpeed;
+    private float velocityY;
+    private bool isGrounded;
+
     private InputAction moveAction;
     private InputAction jumpAction;
+    private InputAction sprintAction;
 
     void OnEnable()
     {
@@ -32,15 +49,22 @@ public class PlayerMovement : MonoBehaviour
         jumpAction.AddBinding("<Gamepad>/buttonSouth");
         jumpAction.performed += OnJump;
         jumpAction.Enable();
+
+        sprintAction = new InputAction(type: InputActionType.Button);
+        sprintAction.AddBinding("<Keyboard>/leftShift");
+        sprintAction.AddBinding("<Keyboard>/rightShift");
+        sprintAction.AddBinding("<Gamepad>/leftTrigger");
+        sprintAction.Enable();
     }
     void OnDisable()
     {
         moveAction?.Disable();
-        if(jumpAction != null)
+        if (jumpAction != null)
         {
             jumpAction.performed -= OnJump;
             jumpAction.Disable();
         }
+        sprintAction?.Disable();
     }
     void OnJump(InputAction.CallbackContext context)
     {
@@ -55,23 +79,60 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
-    // Update is called once per frame
     void Update()
     {
-        isGrounded = Physics.CheckSphere(groundCheck.position, groundDistance, groundMask);
-
-        if (isGrounded && velocity.y < 0)
-        {
-            velocity.y = -2f;
-        }
-        Vector2 input = moveAction.ReadValue<Vector2>();
-        float x = input.x;
-        float z = input.y;
-
-        Vector3 move = transform.right * x + transform.forward * z;
-        controller.Move(move * speed * Time.deltaTime);
-
-        velocity.y += gravity * Time.deltaTime;
-        controller.Move(velocity * Time.deltaTime);
+        HandleGroundCheck();
+        HandleMovement();
+        HandleRotation();
+        HandleGravity();
+        
     }
+    private void HandleGroundCheck()
+    {
+        isGrounded = controller.isGrounded;
+        if (isGrounded && velocityY < 0)
+        {
+            velocityY = -2f;
+        }
+    }
+    private void HandleMovement()
+    {
+        Vector2 input = moveAction.ReadValue<Vector2>();
+        bool isSprinting = sprintAction.IsPressed();
+        float targetSpeed = isSprinting ? sprintSpeed : speed;
+
+        if (input.magnitude > 0.1f)
+        {
+            currentSpeed = Mathf.Lerp(currentSpeed, targetSpeed, acceleration * Time.deltaTime);
+        }
+        else
+        {
+            currentSpeed = Mathf.Lerp(currentSpeed, 0f, deceleration * Time.deltaTime);
+        }
+        Vector3 moveDirection = new Vector3(input.x, 0, input.y).normalized;
+
+        Vector3 targetVelocity = moveDirection * currentSpeed;
+        currentVelocity = Vector3.Lerp(currentVelocity, targetVelocity, acceleration * Time.deltaTime);
+
+        controller.Move(currentVelocity * Time.deltaTime);
+    }
+    private void HandleRotation()
+    {
+        Vector2 input = moveAction.ReadValue<Vector2>();
+        if (input.magnitude > 0.1f)
+        {
+            Vector3 inputDirection = new Vector3(input.x, 0f, input.y).normalized;
+            float targetAngle = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg;
+
+            float currentAngle = transform.eulerAngles.y;
+            float smoothAngle = Mathf.LerpAngle(currentAngle, targetAngle, rotationSmoothness);
+            transform.rotation = Quaternion.Euler(0f, smoothAngle, 0f);
+        }
+    }
+    private void HandleGravity()
+    {
+        velocityY += gravity * Time.deltaTime;
+        controller.Move(new Vector3(0, velocityY, 0f) * Time.deltaTime);
+    }
+    
 }
