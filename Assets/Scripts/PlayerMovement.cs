@@ -24,11 +24,16 @@ public class PlayerMovement : MonoBehaviour
     public float groundDistance = 0.4f;
     public LayerMask groundMask;
 
+    [Header("Animation Settings")]
+    public Animator animator;
+    public float animationSmoothTime = 0.1f;
+
     private Vector3 velocity;
     private Vector3 currentVelocity;
     private float currentSpeed;
     private float velocityY;
     private bool isGrounded;
+    public float animationVelocity;
 
     private InputAction moveAction;
     private InputAction jumpAction;
@@ -71,7 +76,11 @@ public class PlayerMovement : MonoBehaviour
         if (isGrounded)
         {
             Debug.Log("JUMP WORKING");
-            velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
+            velocityY = Mathf.Sqrt(jumpHeight * -2f * gravity);
+            if(animator != null)
+            {
+                animator.SetTrigger("Jump");
+            }
         }
         else
         {
@@ -85,11 +94,15 @@ public class PlayerMovement : MonoBehaviour
         HandleMovement();
         HandleRotation();
         HandleGravity();
-        
+        UpdateAnimator();
     }
     private void HandleGroundCheck()
     {
         isGrounded = controller.isGrounded;
+        if(animator != null)
+        {
+            animator.SetBool("IsGrounded", isGrounded);
+        }
         if (isGrounded && velocityY < 0)
         {
             velocityY = -2f;
@@ -134,5 +147,38 @@ public class PlayerMovement : MonoBehaviour
         velocityY += gravity * Time.deltaTime;
         controller.Move(new Vector3(0, velocityY, 0f) * Time.deltaTime);
     }
+    private void UpdateAnimator()
+    {
+        if (animator == null) return;
+        bool isSprinting = sprintAction.IsPressed();
+        float targetAnimVelocity;
+
+        if (currentSpeed < 0.1f)
+        {
+            targetAnimVelocity = 0f;
+        }
+        else if (isSprinting)
+        {
+            float sprintRatio = Mathf.Clamp01(currentSpeed / sprintSpeed);
+            targetAnimVelocity = Mathf.Lerp(0.5f, 1f, sprintRatio);
+        }
+        else
+        {
+            if (currentSpeed > speed)
+            {
+                float decelerationRatio = Mathf.Clamp01(currentSpeed / sprintSpeed);
+                targetAnimVelocity = Mathf.Lerp(0.5f, 1f, decelerationRatio);
+            }
+            else
+            {
+                float walkRatio = Mathf.Clamp01(currentSpeed / speed);
+                targetAnimVelocity = walkRatio * 0.5f;
+            }
+        }
+        animationVelocity = Mathf.Lerp(animationVelocity, targetAnimVelocity, Time.deltaTime / animationSmoothTime);
+
+        animator.SetFloat("Velocity", animationVelocity);
+    }
+    
     
 }
