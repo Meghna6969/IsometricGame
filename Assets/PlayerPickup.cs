@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using UnityEngine.InputSystem;
+using Unity.VisualScripting;
 
 public class PlayerPickup : MonoBehaviour
 {
@@ -14,16 +15,28 @@ public class PlayerPickup : MonoBehaviour
     public Vector3 rotationOffset = Vector3.zero;
 
     [Header("Throw Settings")]
-    public float throwForce = 10f;
+    public float maxThrowDistance = 10f;
+    public LayerMask groundLayer;
+    public float arcHeight = 2f;
+
+    [Header("Trajectory Visulization")]
+    public LineRenderer trajectoryLine;
+    public int trajectoryResolution = 30;
+    public GameObject targetIndicator;
 
     [Header("UI")]
     public TextMeshProUGUI pickupPromptText;
 
     private GameObject heldObject;
     private Rigidbody heldObjectRb;
-    private Collider heldObjectCollider;
+    private Collider heldPhysicsCollider;
+    private Collider heldTriggerCollider;
     private InputAction throwAction;
     private InputAction dropAction;
+    private Camera mainCamera;
+
+    private bool isAiming = false;
+    private Vector3 targetPosition;
 
     void OnEnable()
     {
@@ -45,10 +58,10 @@ public class PlayerPickup : MonoBehaviour
 
     void Start()
     {
-        if (pickupPromptText != null)
-        {
-            pickupPromptText.gameObject.SetActive(false);
-        }
+        mainCamera = Camera.main;
+        pickupPromptText.gameObject.SetActive(false);
+        trajectoryLine.enabled = false;
+        targetIndicator.SetActive(false);
     }
     public void ShowPickupPrompt(string message)
     {
@@ -62,22 +75,23 @@ public class PlayerPickup : MonoBehaviour
     {
         pickupPromptText.gameObject.SetActive(false);
     }
-    public void PickupObject(GameObject obj)
+    public void PickupObject(GameObject obj, Collider physicsCollider, Collider triggerCollider)
     {
         if (heldObject != null) return;
         heldObject = obj;
         heldObjectRb = obj.GetComponent<Rigidbody>();
+        heldPhysicsCollider = physicsCollider;
+        heldTriggerCollider = triggerCollider;
 
         if (heldObjectRb != null)
         {
             heldObjectRb.isKinematic = true;
             heldObjectRb.useGravity = false;
         }
-        Collider objCollider = obj.GetComponent<Collider>();
-        if (objCollider != null)
-        {
-            objCollider.enabled = false;
-        }
+
+        heldPhysicsCollider.enabled = false;
+        heldTriggerCollider.enabled = false;
+
         obj.transform.SetParent(holdPosition);
         obj.transform.localPosition = positionOffset;
         obj.transform.localRotation = Quaternion.Euler(rotationOffset);
@@ -89,10 +103,70 @@ public class PlayerPickup : MonoBehaviour
         if (heldObject != null && dropAction.WasPressedThisFrame())
         {
             DropObject();
-        }else if (throwAction.WasPressedThisFrame())
+        }
+        else if (throwAction.WasPressedThisFrame())
+        {
+            StartAiming();
+        }
+        else if (throwAction.IsPressed() && isAiming)
+        {
+            UpdateAiming();
+
+        }
+        else if (isAiming && !throwAction.IsPressed())
         {
             ThrowObject();
         }
+    }
+    private void StartAiming()
+    {
+        isAiming = true;
+
+        trajectoryLine.enabled = true;
+        targetIndicator.SetActive(true);
+    }
+    private void UpdateAiming()
+    {
+        Ray ray = mainCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
+        RaycastHit hit;
+        if (Physics.Raycast(ray, out hit, 100f, groundLayer))
+        {
+            Vector3 clampedPosition = hit.point;
+            float distance = Vector3.Distance(transform.position, hit.point);
+
+            if (distance > maxThrowDistance)
+            {
+                Vector3 direction = (hit.point - transform.position).normalized;
+                clampedPosition = transform.position + direction * maxThrowDistance;
+                clampedPosition.y = hit.point.y;
+            }
+            targetPosition = clampedPosition;
+            targetIndicator.transform.position = targetPosition;
+            DrawTrajectory(heldObject.transform.position, targetPosition);
+        }
+    }
+    private void DrawTrajectory(Vector3 start, Vector3 end)
+    {
+        if (trajectoryLine == null) return;
+        trajectoryLine.positionCount = trajectoryResolution;
+        for (int i = 0; i < trajectoryResolution; i++)
+        {
+            float t = i / (float)(trajectoryResolution - 1);
+            Vector3 point = CalculateArcPoint(start, end, t);
+            trajectoryLine.SetPosition(i, point);
+        }
+    }
+    private Vector3 CalculateArcPoint(Vector3 start, Vector3 end, float t)
+    {
+        Vector3 midPoint = Vector3.Lerp(start, end, t);
+        float arc = arcHeight * Mathf.Sin(t * Mathf.PI);
+        midPoint.y += arc;
+        return midPoint;
+    }
+    private Vector3 CalculateThrowVelocity(Vector3 start, Vector3 target)
+    {
+        float gravity = Mathf.Abs(Physics.gravity.y);
+        return Vector3.zero; // Placeholder for future implementation 
     }
     private void DropObject()
     {
@@ -103,13 +177,37 @@ public class PlayerPickup : MonoBehaviour
             heldObjectRb.isKinematic = false;
             heldObjectRb.useGravity = true;
         }
-        Collider objCollider = heldObject.GetComponent<Collider>();
-        if (objCollider != null)
+
+        if (heldPhysicsCollider != null)
         {
-            objCollider.enabled = true;
+            heldPhysicsCollider.enabled = true;
+        }
+        if (heldTriggerCollider != null)
+        {
+            heldTriggerCollider.enabled = true;
         }
         heldObject = null;
         heldObjectRb = null;
-        heldObjectCollider = null;
+        heldPhysicsCollider = null;
+        heldTriggerCollider = null;
+    }
+    private void ThrowObject()
+    {
+        if (heldObject == null) return;
+        heldObject.transform.SetParent(null);
+        if (heldObjectRb != null)
+        {
+            heldObjectRb.isKinematic = false;
+            heldObjectRb.useGravity = true;
+
+            Vector3 throwDirection = transform.forward;
+            heldObjectRb.AddForce(throwDirection * throwForce, ForceMode.VelocityChange);
+        }
+        heldPhysicsCollider.enabled = true;
+        heldTriggerCollider.enabled = true;
+        heldObject = null;
+        heldObjectRb = null;
+        heldPhysicsCollider = null;
+        heldTriggerCollider = null;
     }
 }

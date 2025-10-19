@@ -6,6 +6,9 @@ public class PickupObject : MonoBehaviour
     [Header("Pickup Prompt")]
     public string pickupPrompt = "Press E to pick up";
 
+    public Collider triggerCollider;
+    public Collider physicsCollider;
+
     private bool isInRange = false;
     private PlayerPickup playerPickup;
     private InputAction pickupAction;
@@ -50,7 +53,7 @@ public class PickupObject : MonoBehaviour
     {
         if(isInRange && playerPickup != null && pickupAction.WasPressedThisFrame())
         {
-            playerPickup.PickupObject(gameObject);
+            playerPickup.PickupObject(gameObject, physicsCollider, triggerCollider);
         }
     }
 }
