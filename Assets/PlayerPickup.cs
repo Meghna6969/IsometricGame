@@ -1,8 +1,6 @@
 using UnityEngine;
-using UnityEngine.UI;
 using TMPro;
 using UnityEngine.InputSystem;
-using Unity.VisualScripting;
 
 public class PlayerPickup : MonoBehaviour
 {
@@ -23,6 +21,7 @@ public class PlayerPickup : MonoBehaviour
     public LineRenderer trajectoryLine;
     public int trajectoryResolution = 30;
     public GameObject targetIndicator;
+    public Transform throwStartPoint;
 
     [Header("UI")]
     public TextMeshProUGUI pickupPromptText;
@@ -120,6 +119,8 @@ public class PlayerPickup : MonoBehaviour
     }
     private void StartAiming()
     {
+        if (heldObject == null) return;
+
         isAiming = true;
 
         trajectoryLine.enabled = true;
@@ -129,44 +130,75 @@ public class PlayerPickup : MonoBehaviour
     {
         Ray ray = mainCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
         RaycastHit hit;
-        if (Physics.Raycast(ray, out hit, 100f, groundLayer))
+        if (Physics.Raycast(ray, out hit, 1000f, groundLayer))
         {
-            Vector3 clampedPosition = hit.point;
-            float distance = Vector3.Distance(transform.position, hit.point);
+            Vector3 groundPoint = hit.point;
+
+            Vector3 flatDirection = new Vector3(groundPoint.x - transform.position.x, 0, groundPoint.z - transform.position.z);
+            float distance = flatDirection.magnitude;
 
             if (distance > maxThrowDistance)
             {
-                Vector3 direction = (hit.point - transform.position).normalized;
-                clampedPosition = transform.position + direction * maxThrowDistance;
-                clampedPosition.y = hit.point.y;
+                flatDirection = flatDirection.normalized * maxThrowDistance;
+                groundPoint = new Vector3(transform.position.x + flatDirection.x, hit.point.y, transform.position.z + flatDirection.z);
             }
-            targetPosition = clampedPosition;
-            targetIndicator.transform.position = targetPosition;
-            DrawTrajectory(heldObject.transform.position, targetPosition);
+
+            targetPosition = groundPoint;
+            if (targetIndicator != null)
+            {
+                targetIndicator.transform.position = targetPosition + Vector3.up * 0.1f;
+            }
+            Vector3 lineStartPos = GetLineStartPosition();
+            DrawTrajectory(lineStartPos, targetPosition);
+
         }
+    }
+    private Vector3 GetLineStartPosition()
+    {
+        if (throwStartPoint != null)
+        {
+            return throwStartPoint.position;
+        }
+        return transform.position;
     }
     private void DrawTrajectory(Vector3 start, Vector3 end)
     {
         if (trajectoryLine == null) return;
         trajectoryLine.positionCount = trajectoryResolution;
+        float heightOffset = start.y - end.y;
         for (int i = 0; i < trajectoryResolution; i++)
         {
             float t = i / (float)(trajectoryResolution - 1);
-            Vector3 point = CalculateArcPoint(start, end, t);
+            Vector3 point = CalculateArcPoint(start, end, t, heightOffset);
             trajectoryLine.SetPosition(i, point);
         }
     }
-    private Vector3 CalculateArcPoint(Vector3 start, Vector3 end, float t)
+    private Vector3 CalculateArcPoint(Vector3 start, Vector3 end, float t, float heightOffset)
     {
-        Vector3 midPoint = Vector3.Lerp(start, end, t);
+        Vector3 horizontalPoint = new Vector3(Mathf.Lerp(start.x, end.x, t), 0, Mathf.Lerp(start.z, end.z, t));
+
         float arc = arcHeight * Mathf.Sin(t * Mathf.PI);
-        midPoint.y += arc;
-        return midPoint;
+        float yPosition = Mathf.Lerp(start.y, end.y, t) + arc;
+
+        horizontalPoint.y = yPosition;
+
+        return horizontalPoint;
     }
     private Vector3 CalculateThrowVelocity(Vector3 start, Vector3 target)
     {
         float gravity = Mathf.Abs(Physics.gravity.y);
-        return Vector3.zero; // Placeholder for future implementation 
+        Vector3 direction = target - start;
+        float horizontalDistance = new Vector3(direction.x, 0, direction.z).magnitude;
+        float verticalDistance = direction.y;
+
+        float time = Mathf.Sqrt((2 * arcHeight) / gravity) + Mathf.Sqrt(Mathf.Max(0, (2 * (arcHeight - verticalDistance)) / gravity));
+
+       if (time <= 0) time = 1f;
+
+        Vector3 velocity = new Vector3(direction.x, 0, direction.z) / time;
+        velocity.y = (verticalDistance / time) + (0.5f * gravity * time);
+
+        return velocity;
     }
     private void DropObject()
     {
@@ -194,17 +226,26 @@ public class PlayerPickup : MonoBehaviour
     private void ThrowObject()
     {
         if (heldObject == null) return;
+
+        isAiming = false;
+
+        trajectoryLine.enabled = false;
+        targetIndicator.SetActive(false);
+
+        Vector3 throwStartPos = heldObject.transform.position;
         heldObject.transform.SetParent(null);
+
         if (heldObjectRb != null)
         {
             heldObjectRb.isKinematic = false;
             heldObjectRb.useGravity = true;
 
-            Vector3 throwDirection = transform.forward;
-            heldObjectRb.AddForce(throwDirection * throwForce, ForceMode.VelocityChange);
+            Vector3 throwVelocity = CalculateThrowVelocity(throwStartPos, targetPosition);
+            heldObjectRb.linearVelocity = throwVelocity;
         }
         heldPhysicsCollider.enabled = true;
         heldTriggerCollider.enabled = true;
+
         heldObject = null;
         heldObjectRb = null;
         heldPhysicsCollider = null;
