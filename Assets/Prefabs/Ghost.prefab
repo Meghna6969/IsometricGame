@@ -315,8 +315,8 @@ MonoBehaviour:
   player: {fileID: 0}
   moveSpeed: 5
   stoppingDistance: 3
-  moveSpeedVariation: 0.3
-  stoppingDistanceVariation: 0.5
+  moveSpeedVariation: 0.5
+  stoppingDistanceVariation: 0.92
   personalSpaceRadius: 1
 --- !u!95 &4113913499460215045
 Animator:

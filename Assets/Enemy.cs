@@ -29,8 +29,8 @@ public class Enemy : MonoBehaviour
             }
         }
         actualMoveSpeed = moveSpeed * Random.Range(1f - moveSpeedVariation, 1f + moveSpeedVariation);
-        actualStoppingDistance = stoppingDistance * Random.Range(-stoppingDistanceVariation, stoppingDistanceVariation);
-
+        actualStoppingDistance = stoppingDistance + Random.Range(-stoppingDistanceVariation, stoppingDistanceVariation);
+        actualStoppingDistance = Mathf.Max(0.5f, actualStoppingDistance);
         randomOffset = new Vector3(Random.Range(-personalSpaceRadius, personalSpaceRadius), 0f, Random.Range(-personalSpaceRadius, personalSpaceRadius));
 
         animationOffset = Random.Range(0f, 1f);
