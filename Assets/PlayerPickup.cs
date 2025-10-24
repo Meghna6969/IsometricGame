@@ -1,6 +1,7 @@
 using UnityEngine;
 using TMPro;
 using UnityEngine.InputSystem;
+using System.Collections;
 
 public class PlayerPickup : MonoBehaviour
 {
@@ -16,6 +17,7 @@ public class PlayerPickup : MonoBehaviour
     public float maxThrowDistance = 10f;
     public LayerMask groundLayer;
     public float arcHeight = 2f;
+    public float ignoreCollisionTime = 0.5f;
 
     [Header("Trajectory Visulization")]
     public LineRenderer trajectoryLine;
@@ -164,8 +166,10 @@ public class PlayerPickup : MonoBehaviour
     private void DrawTrajectory(Vector3 start, Vector3 end)
     {
         if (trajectoryLine == null) return;
+        
         trajectoryLine.positionCount = trajectoryResolution;
         float heightOffset = start.y - end.y;
+        Debug.Log($"Start: {start}, End: {end}");
         for (int i = 0; i < trajectoryResolution; i++)
         {
             float t = i / (float)(trajectoryResolution - 1);
@@ -175,14 +179,15 @@ public class PlayerPickup : MonoBehaviour
     }
     private Vector3 CalculateArcPoint(Vector3 start, Vector3 end, float t, float heightOffset)
     {
-        Vector3 horizontalPoint = new Vector3(Mathf.Lerp(start.x, end.x, t), 0, Mathf.Lerp(start.z, end.z, t));
+        float x = Mathf.Lerp(start.x, end.x, t);
+        float z = Mathf.Lerp(start.z, end.z, t);
 
+        float baseY = Mathf.Lerp(start.y, end.y, t);
         float arc = arcHeight * Mathf.Sin(t * Mathf.PI);
-        float yPosition = Mathf.Lerp(start.y, end.y, t) + arc;
 
-        horizontalPoint.y = yPosition;
+        float y = baseY + arc;
 
-        return horizontalPoint;
+        return new Vector3(x, y, z);
     }
     private Vector3 CalculateThrowVelocity(Vector3 start, Vector3 target)
     {
@@ -246,9 +251,27 @@ public class PlayerPickup : MonoBehaviour
         heldPhysicsCollider.enabled = true;
         heldTriggerCollider.enabled = true;
 
+        Collider playerCollider = GetComponent<Collider>();
+        if (playerCollider != null && heldPhysicsCollider != null)
+        {
+            Physics.IgnoreCollision(heldPhysicsCollider, playerCollider, true);
+
+            Collider objectCol = heldPhysicsCollider;
+            StartCoroutine(ReenableCollisionAfterDelay(objectCol, playerCollider));
+        }
+
+
         heldObject = null;
         heldObjectRb = null;
         heldPhysicsCollider = null;
         heldTriggerCollider = null;
+    }
+    private IEnumerator ReenableCollisionAfterDelay(Collider objectCol, Collider playerCol)
+    {
+        yield return new WaitForSeconds(ignoreCollisionTime);
+        if(objectCol != null && playerCol != null)
+        {
+            Physics.IgnoreCollision(objectCol, playerCol, false);
+        }
     }
 }
