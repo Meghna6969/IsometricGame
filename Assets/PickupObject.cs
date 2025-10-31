@@ -9,9 +9,21 @@ public class PickupObject : MonoBehaviour
     public Collider triggerCollider;
     public Collider physicsCollider;
 
+    [Header("Damage Settings")]
+    public float throwDamage = 50f;
+    public float damageVelocityThreshold = 2f;
+
     private bool isInRange = false;
     private PlayerPickup playerPickup;
     private InputAction pickupAction;
+
+    private Rigidbody rb;
+    private bool isBeingHeld = false;
+
+    void Start()
+    {
+        rb = GetComponent<Rigidbody>();
+    }
 
     void OnEnable()
     {
@@ -20,9 +32,18 @@ public class PickupObject : MonoBehaviour
         pickupAction.AddBinding("<Gamepad>/buttonWest");
         pickupAction.Enable();
     }
+    
     void OnDisable()
     {
         pickupAction?.Disable();
+    }
+
+    void Update()
+    {
+        if (isInRange && playerPickup != null && pickupAction.WasPressedThisFrame())
+        {
+            playerPickup.PickupObject(gameObject, physicsCollider, triggerCollider);
+        }
     }
 
     void OnTriggerEnter(Collider other)
@@ -37,6 +58,7 @@ public class PickupObject : MonoBehaviour
             }
         }
     }
+    
     void OnTriggerExit(Collider other)
     {
         if (other.CompareTag("Player"))
@@ -49,11 +71,19 @@ public class PickupObject : MonoBehaviour
             }
         }
     }
-    void Update()
+
+    public void OnPickedUp()
     {
-        if(isInRange && playerPickup != null && pickupAction.WasPressedThisFrame())
-        {
-            playerPickup.PickupObject(gameObject, physicsCollider, triggerCollider);
-        }
+        isBeingHeld = true;
+    }
+
+    public void OnThrown()
+    {
+        isBeingHeld = false;
+    }
+
+    public void OnDropped()
+    {
+        isBeingHeld = false;
     }
 }

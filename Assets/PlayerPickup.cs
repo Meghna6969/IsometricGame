@@ -17,6 +17,7 @@ public class PlayerPickup : MonoBehaviour
     public float maxThrowDistance = 10f;
     public LayerMask groundLayer;
     public float arcHeight = 2f;
+    public float throwForceMultiplier = 1.5f;
     public float ignoreCollisionTime = 0.5f;
 
     [Header("Trajectory Visulization")]
@@ -96,6 +97,12 @@ public class PlayerPickup : MonoBehaviour
         obj.transform.SetParent(holdPosition);
         obj.transform.localPosition = positionOffset;
         obj.transform.localRotation = Quaternion.Euler(rotationOffset);
+
+        PickupObject pickupObj = obj.GetComponent<PickupObject>();
+        if(pickupObj != null)
+        {
+            pickupObj.OnPickedUp();
+        }
 
         HidePickupPrompt();
     }
@@ -203,11 +210,17 @@ public class PlayerPickup : MonoBehaviour
         Vector3 velocity = new Vector3(direction.x, 0, direction.z) / time;
         velocity.y = (verticalDistance / time) + (0.5f * gravity * time);
 
-        return velocity;
+        return velocity * throwForceMultiplier;
     }
     private void DropObject()
     {
         if (heldObject == null) return;
+
+        PickupObject pickupObj = heldObject.GetComponent<PickupObject>();
+        if(pickupObj != null)
+        {
+            pickupObj.OnDropped();
+        }
         heldObject.transform.SetParent(null);
         if (heldObjectRb != null)
         {
