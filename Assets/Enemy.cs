@@ -10,6 +10,7 @@ public class Enemy : MonoBehaviour
     public float moveSpeedVariation = 0.3f;
     public float stoppingDistanceVariation = 0.5f;
     public float personalSpaceRadius = 1f;
+    public float separationStrength = 2f;
 
     private Animator animator;
     private float actualMoveSpeed;
@@ -28,7 +29,9 @@ public class Enemy : MonoBehaviour
                 player = playerObject.transform;
             }
         }
+
         actualMoveSpeed = moveSpeed * Random.Range(1f - moveSpeedVariation, 1f + moveSpeedVariation);
+        
         actualStoppingDistance = stoppingDistance + Random.Range(-stoppingDistanceVariation, stoppingDistanceVariation);
         actualStoppingDistance = Mathf.Max(0.5f, actualStoppingDistance);
         randomOffset = new Vector3(Random.Range(-personalSpaceRadius, personalSpaceRadius), 0f, Random.Range(-personalSpaceRadius, personalSpaceRadius));
@@ -45,23 +48,32 @@ public class Enemy : MonoBehaviour
     {
         if (player == null) return;
 
-        Vector3 targetPosition = player.position + randomOffset;
-        float distance = Vector3.Distance(transform.position, targetPosition);
+        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
 
-        if (distance > actualStoppingDistance)
+        if (distanceToPlayer > actualStoppingDistance)
         {
             animator.SetBool("Attack", false);
             Vector3 direction = (player.position - transform.position).normalized;
             Vector3 separationForce = CalculateSeparation();
-            direction = (direction + separationForce).normalized;
-            transform.position += direction * actualMoveSpeed * Time.deltaTime;
+            Vector3 finalDirection = (direction + separationForce * separationStrength).normalized;
 
-            Quaternion targetRotation = Quaternion.LookRotation(direction);
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * 5f);
+            transform.position += finalDirection * actualMoveSpeed * Time.deltaTime;
+            if(finalDirection != Vector3.zero)
+            {
+                Quaternion targetRotation = Quaternion.LookRotation(finalDirection);
+                transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * 5f);
+            }
         }
         else
         {
             animator.SetBool("Attack", true);
+            Vector3 separationForce = CalculateSeparation();
+
+            if (separationForce.magnitude > 0.1f)
+            {
+                transform.position += separationForce * actualMoveSpeed * 0.5f * Time.deltaTime;
+            }
+            
             Vector3 lookDirection = (player.position - transform.position).normalized;
             if(lookDirection != Vector3.zero)
             {
@@ -90,7 +102,8 @@ public class Enemy : MonoBehaviour
 
                 if (distance > 0f && distance < personalSpaceRadius * 2f)
                 {
-                    separationForce += awayFromNeighbor.normalized / distance;
+                    float strength = 1f - (distance / (personalSpaceRadius * 2f));
+                    separationForce += awayFromNeighbor.normalized * strength;
                     neighborCount++;
                 }
             }
