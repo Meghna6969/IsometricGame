@@ -17,7 +17,6 @@ public class PlayerPickup : MonoBehaviour
     public float maxThrowDistance = 10f;
     public LayerMask groundLayer;
     public float arcHeight = 2f;
-    public float throwForceMultiplier = 1.5f;
     public float ignoreCollisionTime = 0.5f;
 
     [Header("Trajectory Visulization")]
@@ -39,6 +38,9 @@ public class PlayerPickup : MonoBehaviour
 
     private bool isAiming = false;
     private Vector3 targetPosition;
+
+    private Vector3 plannedVelocity;
+    private float plannedFlightTime;
 
     void OnEnable()
     {
@@ -137,28 +139,48 @@ public class PlayerPickup : MonoBehaviour
     }
     private void UpdateAiming()
     {
+        
         Ray ray = mainCamera.ScreenPointToRay(Mouse.current.position.ReadValue());
         RaycastHit hit;
         if (Physics.Raycast(ray, out hit, 1000f, groundLayer))
         {
-            Vector3 groundPoint = hit.point;
+            Vector3 start = GetLineStartPosition();
 
-            Vector3 flatDirection = new Vector3(groundPoint.x - transform.position.x, 0, groundPoint.z - transform.position.z);
-            float distance = flatDirection.magnitude;
+            Vector3 flat = new Vector3(hit.point.x - start.x, 0f, hit.point.z - start.z);
+            Vector3 clampedXZ;
 
-            if (distance > maxThrowDistance)
+            if (flat.magnitude > maxThrowDistance)
             {
-                flatDirection = flatDirection.normalized * maxThrowDistance;
-                groundPoint = new Vector3(transform.position.x + flatDirection.x, hit.point.y, transform.position.z + flatDirection.z);
+                clampedXZ = start + flat.normalized * maxThrowDistance;
+
+                Vector3 fromAbove = clampedXZ + Vector3.up * 100f;
+
+                if (Physics.Raycast(fromAbove, Vector3.down, out var groundHit, 200f, groundLayer))
+                {
+                    targetPosition = groundHit.point;
+                }
+                else
+                {
+                    targetPosition = new Vector3(clampedXZ.x, hit.point.y, clampedXZ.z);
+                }
+            }
+            else
+            {
+                targetPosition = hit.point;
             }
 
-            targetPosition = groundPoint;
-            if (targetIndicator != null)
+            if (SolveBallisticArcWithApex(start, targetPosition, arcHeight, out var v0, out var flightTime))
             {
-                targetIndicator.transform.position = targetPosition + Vector3.up * 0.1f;
+                Vector3 predictedImpact = DrawTrajectory(start, v0, flightTime);
+
+                plannedVelocity = v0;
+                plannedFlightTime = flightTime;
+
+                if(targetIndicator != null)
+                {
+                    targetIndicator.transform.position = predictedImpact + Vector3.up * 0.05f;
+                }
             }
-            Vector3 lineStartPos = GetLineStartPosition();
-            DrawTrajectory(lineStartPos, targetPosition);
 
         }
     }
@@ -170,19 +192,99 @@ public class PlayerPickup : MonoBehaviour
         }
         return transform.position;
     }
-    private void DrawTrajectory(Vector3 start, Vector3 end)
+    private Vector3 DrawTrajectory(Vector3 start, Vector3 initialVelocity, float flightTime)
     {
-        if (trajectoryLine == null) return;
-        
+        if (trajectoryLine == null) return start;
         trajectoryLine.positionCount = trajectoryResolution;
-        float heightOffset = start.y - end.y;
-        Debug.Log($"Start: {start}, End: {end}");
+
+        Vector3 prevPoint = start;
+        Vector3 hitPoint = start;
+
+        int lastIndex = trajectoryResolution - 1;
         for (int i = 0; i < trajectoryResolution; i++)
         {
-            float t = i / (float)(trajectoryResolution - 1);
-            Vector3 point = CalculateArcPoint(start, end, t, heightOffset);
+            float t = Mathf.Lerp(0f, flightTime, i / (float)lastIndex);
+            Vector3 point = CalculatePhysicsPoint(start, initialVelocity, t);
             trajectoryLine.SetPosition(i, point);
+
+            if (i > 0)
+            {
+                Vector3 segment = point - prevPoint;
+                float dist = segment.magnitude;
+                if (dist > 0.001f)
+                {
+                    if (Physics.Raycast(prevPoint, segment.normalized, out var hit, dist, groundLayer))
+                    {
+                        hitPoint = hit.point;
+                        for (int j = i; j < trajectoryResolution; j++)
+                        {
+                            trajectoryLine.SetPosition(j, hitPoint);
+                        }
+                        return hitPoint;
+                    }
+                }
+            }
+            hitPoint = point;
+            prevPoint = point;
         }
+        return hitPoint;
+
+        
+    }
+    private Vector3 CalculatePhysicsPoint(Vector3 start, Vector3 velocity, float time)
+    {
+        Vector3 point = start + velocity * time;
+        point.y += 0.5f * Physics.gravity.y * time * time;
+
+        return point;
+    }
+    private bool SolveBallisticArcWithApex(Vector3 start, Vector3 end, float extraApexHeight, out Vector3 velocity, out float totalTime)
+    {
+        float g = Mathf.Abs(Physics.gravity.y);
+
+        float startY = start.y;
+        float endY = end.y;
+        float apexY = Mathf.Max(startY, endY) + Mathf.Max(0.01f, extraApexHeight);
+        float vy = Mathf.Sqrt(2f * g * (apexY - startY));
+
+        float timeUp = vy / g;
+        float timeDownSquared = 2f * Mathf.Max(0f, apexY - endY) / g;
+        if (timeDownSquared <= 0f)
+        {
+            velocity = Vector3.zero;
+            totalTime = 0f;
+            return false;
+        }
+        float timeDown = Mathf.Sqrt(timeDownSquared);
+        totalTime = timeUp + timeDown;
+
+        Vector3 to = end - start;
+        Vector3 toXZ = new Vector3(to.x, 0f, to.z);
+        Vector3 vxz = toXZ / Mathf.Max(0.001f, totalTime);
+
+        velocity = vxz + Vector3.up * vy;
+        return true;
+    }
+    private Vector3 CalculateArcPointForTrajectory(Vector3 start, Vector3 end, float t)
+    {
+        Vector3 velocity = CalculateThrowVelocity(start, end);
+        float time = t * CalculateFlightTime(start, end);
+
+        Vector3 point = start + velocity * time;
+        point.y += 0.5f * Physics.gravity.y * time * time;
+
+        return point;
+    }
+    private float CalculateFlightTime(Vector3 start, Vector3 target)
+    {
+        float gravity = Mathf.Abs(Physics.gravity.y);
+        Vector3 direction = target - start;
+        float verticalDistance = direction.y;
+
+        float time = Mathf.Sqrt((2 * arcHeight) / gravity) + Mathf.Sqrt(Mathf.Max(0, (2 * (arcHeight - verticalDistance)) / gravity));
+        if (time <= 0) time = 1f;
+
+        return time;
     }
     private Vector3 CalculateArcPoint(Vector3 start, Vector3 end, float t, float heightOffset)
     {
@@ -190,7 +292,7 @@ public class PlayerPickup : MonoBehaviour
         float z = Mathf.Lerp(start.z, end.z, t);
 
         float baseY = Mathf.Lerp(start.y, end.y, t);
-        float arc = arcHeight * Mathf.Sin(t * Mathf.PI);
+        float arc = heightOffset * Mathf.Sin(t * Mathf.PI);
 
         float y = baseY + arc;
 
@@ -210,7 +312,7 @@ public class PlayerPickup : MonoBehaviour
         Vector3 velocity = new Vector3(direction.x, 0, direction.z) / time;
         velocity.y = (verticalDistance / time) + (0.5f * gravity * time);
 
-        return velocity * throwForceMultiplier;
+        return velocity;
     }
     private void DropObject()
     {
@@ -250,7 +352,13 @@ public class PlayerPickup : MonoBehaviour
         trajectoryLine.enabled = false;
         targetIndicator.SetActive(false);
 
-        Vector3 throwStartPos = heldObject.transform.position;
+        PickupObject pickupObj = heldObject.GetComponent<PickupObject>();
+        if(pickupObj != null)
+        {
+            pickupObj.OnThrown();
+        }
+
+        Vector3 throwStartPos = GetLineStartPosition();
         heldObject.transform.SetParent(null);
 
         if (heldObjectRb != null)
@@ -258,8 +366,7 @@ public class PlayerPickup : MonoBehaviour
             heldObjectRb.isKinematic = false;
             heldObjectRb.useGravity = true;
 
-            Vector3 throwVelocity = CalculateThrowVelocity(throwStartPos, targetPosition);
-            heldObjectRb.linearVelocity = throwVelocity;
+            heldObjectRb.linearVelocity = plannedVelocity;
         }
         heldPhysicsCollider.enabled = true;
         heldTriggerCollider.enabled = true;

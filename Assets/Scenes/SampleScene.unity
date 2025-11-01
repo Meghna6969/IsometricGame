@@ -975,6 +975,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Chair3
       objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: aa1b204bca644fa4e8fd6dffc37f583e, type: 3}
+      propertyPath: m_TagString
+      value: EnemysEnemy
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -1215,6 +1219,8 @@ MonoBehaviour:
   pickupPrompt: Press E to pick up
   triggerCollider: {fileID: 1555895270}
   physicsCollider: {fileID: 1555895269}
+  throwDamage: 50
+  damageVelocityThreshold: 2
 --- !u!54 &1555895265
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -1282,8 +1288,8 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 1.31
-  m_Center: {x: 0.000000014901161, y: 0.6710321, z: 0.03873609}
+  m_Radius: 0.76015055
+  m_Center: {x: 2.093885e-10, y: 0.67103195, z: 0.033014633}
 --- !u!1 &1580111698
 GameObject:
   m_ObjectHideFlags: 0
@@ -1476,6 +1482,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 8
   arcHeight: 1.5
+  throwForceMultiplier: 1.5
   ignoreCollisionTime: 0.5
   trajectoryLine: {fileID: 1064832720}
   trajectoryResolution: 30
@@ -1623,9 +1630,13 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 6320130380109303246, guid: d021b477471598042aedea44fc51d6e4, type: 3}
+      propertyPath: healthBarOffset.y
+      value: 1.5
+      objectReference: {fileID: 0}
     - target: {fileID: 7020922960577422781, guid: d021b477471598042aedea44fc51d6e4, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0
+      value: -7.2
       objectReference: {fileID: 0}
     - target: {fileID: 7020922960577422781, guid: d021b477471598042aedea44fc51d6e4, type: 3}
       propertyPath: m_LocalPosition.y
@@ -1633,7 +1644,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7020922960577422781, guid: d021b477471598042aedea44fc51d6e4, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -15.19
+      value: -3.65
       objectReference: {fileID: 0}
     - target: {fileID: 7020922960577422781, guid: d021b477471598042aedea44fc51d6e4, type: 3}
       propertyPath: m_LocalRotation.w
@@ -1671,8 +1682,7 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
-    m_RemovedComponents:
-    - {fileID: 0}
+    m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []

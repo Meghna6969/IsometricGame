@@ -62,11 +62,11 @@ public class WavesManager : MonoBehaviour
             for (int i = 0; i < enemiesToSpawn; i++)
             {
                 SpawnEnemy();
-                yield return new WaitForSeconds(0.5f);
+                yield return new WaitForSeconds(2f);
             }
             while (enemiesAlive > 0)
             {
-                yield return new WaitForSeconds(0.5f);
+                yield return new WaitForSeconds(2f);
             }
             waveInProgress = false;
 

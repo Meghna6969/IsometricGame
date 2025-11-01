@@ -702,11 +702,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   maxHealth: 100
   currentHealth: 0
-  collisionDamage: 50
   damageResetTime: 1
-  heatlhBarFill: {fileID: 2688330435236021758}
+  healthBarFill: {fileID: 0}
   healthBarCanvas: {fileID: 8639691621492092992}
-  healthBarOffset: {x: 0, y: 1.5, z: 0}
+  healthBarOffset: {x: 0, y: 5, z: 0}
   deathEffect: {fileID: 0}
   deathDelay: 0
 --- !u!65 &7635789396177847690
